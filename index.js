@@ -9,10 +9,6 @@ const path = require("path");
 const fs = require("fs");
 const cloudinary = require("cloudinary").v2;
 const { CloudinaryStorage } = require("multer-storage-cloudinary");
-const upload = multer({ 
-  storage,
-  limits: { fileSize: 2 * 1024 * 1024 }
-});
 
 dotenv.config();
 
@@ -20,7 +16,6 @@ const app = express();
 
 app.use(cors());
 app.use(express.json());
-
 
 // Konfigurasi Rahasia Cloudinary
 cloudinary.config({
@@ -37,7 +32,10 @@ const storage = new CloudinaryStorage({
     allowed_formats: ["jpg", "png", "jpeg", "webp"],
   },
 });
-const upload = multer({ storage });
+const upload = multer({
+  storage,
+  limits: { fileSize: 2 * 1024 * 1024 },
+});
 
 // Hubungkan ke Database MySQL
 const db = mysql
