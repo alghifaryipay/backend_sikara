@@ -9,6 +9,10 @@ const path = require("path");
 const fs = require("fs");
 const cloudinary = require("cloudinary").v2;
 const { CloudinaryStorage } = require("multer-storage-cloudinary");
+const upload = multer({ 
+  storage,
+  limits: { fileSize: 2 * 1024 * 1024 }
+});
 
 dotenv.config();
 
@@ -17,11 +21,6 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-if (!fs.existsSync("./uploads")) {
-  fs.mkdirSync("./uploads");
-}
-
-app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 // Konfigurasi Rahasia Cloudinary
 cloudinary.config({
