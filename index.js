@@ -112,12 +112,10 @@ app.post("/api/auth/register", async (req, res) => {
     // D. JIKA DAFTAR SEBAGAI UMKM, OTOMATIS MASUKKAN DATA KE TABEL PROFIL UMKM
     if (role === "umkm") {
       if (!business_name || !phone || !location || !category) {
-        return res
-          .status(400)
-          .json({
-            message:
-              "Untuk akun UMKM; Nama Usaha, Telepon, Lokasi, dan Kategori wajib diisi!",
-          });
+        return res.status(400).json({
+          message:
+            "Untuk akun UMKM; Nama Usaha, Telepon, Lokasi, dan Kategori wajib diisi!",
+        });
       }
 
       await db.query(
@@ -153,11 +151,9 @@ app.post("/api/auth/login", async (req, res) => {
       [email, role],
     );
     if (users.length === 0) {
-      return res
-        .status(400)
-        .json({
-          message: "Akun tidak ditemukan atau salah memilih status masuk!",
-        });
+      return res.status(400).json({
+        message: "Akun tidak ditemukan atau salah memilih status masuk!",
+      });
     }
 
     const user = users[0];
@@ -172,22 +168,23 @@ app.post("/api/auth/login", async (req, res) => {
     const token = jwt.sign(
       { id: user.id, name: user.name, role: user.role },
       process.env.JWT_SECRET,
-      { expiresIn: "1d" }, // Berlaku selama 1 hari
+      { expiresIn: "1d" },
     );
 
-    // 🔥 PERBAIKAN: Cari logo dari tabel umkm_profiles jika statusnya UMKM
+    // 🔥 PERBAIKAN: Ambil logo_url DAN business_name dari tabel umkm_profiles
     let userLogoUrl = "";
+    let userBusinessName = "";
     if (user.role === "umkm") {
       const [profile] = await db.query(
-        "SELECT logo_url FROM umkm_profiles WHERE user_id = ?",
+        "SELECT logo_url, business_name FROM umkm_profiles WHERE user_id = ?",
         [user.id],
       );
       if (profile.length > 0) {
         userLogoUrl = profile[0].logo_url;
+        userBusinessName = profile[0].business_name; // Tarik nama usaha
       }
     }
 
-    // D. Data dibungkus ke dalam objek 'user' agar klop dengan frontend
     return res.status(200).json({
       message: "Login berhasil!",
       token: token,
@@ -196,7 +193,8 @@ app.post("/api/auth/login", async (req, res) => {
         id: user.id,
         name: user.name,
         email: user.email,
-        logo_url: userLogoUrl, // <-- Fotonya sekarang ikut dikirim masuk!
+        logo_url: userLogoUrl,
+        business_name: userBusinessName, // Ikut dikirim ke frontend
       },
     });
   } catch (error) {
@@ -613,11 +611,9 @@ app.post("/api/umkm/orders-manual", async (req, res) => {
     const { umkm_id, items } = req.body;
 
     if (!umkm_id || !items || !Array.isArray(items) || items.length === 0) {
-      return res
-        .status(400)
-        .json({
-          message: "Keranjang belanja masih kosong atau data tidak valid!",
-        });
+      return res.status(400).json({
+        message: "Keranjang belanja masih kosong atau data tidak valid!",
+      });
     }
 
     const queryText = `
@@ -658,11 +654,9 @@ app.post("/api/admin/products", async (req, res) => {
     req.body;
 
   if (!title || !price || !stock || !business_name) {
-    return res
-      .status(400)
-      .json({
-        message: "Nama produk, harga, stok, dan nama usaha wajib diisi!",
-      });
+    return res.status(400).json({
+      message: "Nama produk, harga, stok, dan nama usaha wajib diisi!",
+    });
   }
 
   try {
@@ -673,11 +667,9 @@ app.post("/api/admin/products", async (req, res) => {
     );
 
     if (umkmRow.length === 0) {
-      return res
-        .status(400)
-        .json({
-          message: `Nama UMKM "${business_name}" tidak ditemukan di database! Pastikan penulisannya sama persis.`,
-        });
+      return res.status(400).json({
+        message: `Nama UMKM "${business_name}" tidak ditemukan di database! Pastikan penulisannya sama persis.`,
+      });
     }
 
     const umkmId = umkmRow[0].id;
@@ -701,11 +693,9 @@ app.post("/api/admin/products", async (req, res) => {
       .json({ message: "Produk baru berhasil ditambahkan oleh Admin!" });
   } catch (error) {
     console.error("Gagal menambahkan produk lewat panel admin:", error);
-    return res
-      .status(500)
-      .json({
-        message: "Terjadi kesalahan pada server saat menyimpan produk.",
-      });
+    return res.status(500).json({
+      message: "Terjadi kesalahan pada server saat menyimpan produk.",
+    });
   }
 });
 
@@ -773,11 +763,9 @@ app.post("/api/admin/umkm", async (req, res) => {
       .json({ message: "Mitra UMKM dan akun login berhasil dibuat!" });
   } catch (error) {
     console.error("Gagal mendaftarkan UMKM baru via panel admin:", error);
-    return res
-      .status(500)
-      .json({
-        message: "Terjadi kesalahan pada server saat mendaftarkan UMKM.",
-      });
+    return res.status(500).json({
+      message: "Terjadi kesalahan pada server saat mendaftarkan UMKM.",
+    });
   }
 });
 
@@ -895,57 +883,81 @@ app.post("/api/upload", upload.single("image"), (req, res) => {
 // =======================================================
 // 🔥 API ADMIN: UPDATE (EDIT) DATA UMKM
 // =======================================================
-app.put('/api/admin/umkm/:id', async (req, res) => {
-    try {
-        const { id } = req.params;
-        const { business_name, owner_name, email, phone, location, category, status } = req.body;
+app.put("/api/admin/umkm/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const {
+      business_name,
+      owner_name,
+      email,
+      phone,
+      location,
+      category,
+      status,
+    } = req.body;
 
-        const queryText = `
+    const queryText = `
             UPDATE umkm_profiles 
             SET business_name = ?, owner_name = ?, email = ?, phone = ?, location = ?, category = ?, status = ?
             WHERE id = ?
         `;
-        
-        await db.query(queryText, [business_name, owner_name, email, phone, location, category, status, id]);
-        
-        // (Opsional) Jika email dan owner_name diupdate, update juga di tabel users
-        // await db.query('UPDATE users SET name = ?, email = ? WHERE id = (SELECT user_id FROM umkm_profiles WHERE id = ?)', [owner_name, email, id]);
 
-        return res.status(200).json({ message: 'Data UMKM berhasil diperbarui!' });
-    } catch (error) {
-        console.error("Error update UMKM admin:", error);
-        return res.status(500).json({ message: 'Gagal memperbarui data UMKM.' });
-    }
+    await db.query(queryText, [
+      business_name,
+      owner_name,
+      email,
+      phone,
+      location,
+      category,
+      status,
+      id,
+    ]);
+
+    // (Opsional) Jika email dan owner_name diupdate, update juga di tabel users
+    // await db.query('UPDATE users SET name = ?, email = ? WHERE id = (SELECT user_id FROM umkm_profiles WHERE id = ?)', [owner_name, email, id]);
+
+    return res.status(200).json({ message: "Data UMKM berhasil diperbarui!" });
+  } catch (error) {
+    console.error("Error update UMKM admin:", error);
+    return res.status(500).json({ message: "Gagal memperbarui data UMKM." });
+  }
 });
 
 // =======================================================
 // 🔥 API ADMIN: HAPUS PERMANEN MITRA UMKM
 // =======================================================
-app.delete('/api/admin/umkm/:id', async (req, res) => {
-    try {
-        const { id } = req.params;
-        
-        // Karena kita menggunakan ON DELETE CASCADE di database, 
-        // menghapus data 'user_id' di tabel users akan otomatis melenyapkan 
-        // profil umkm, produk, dan pesanannya sekaligus sampai bersih tak bersisa!
-        
-        // 1. Cari tahu user_id dari UMKM ini
-        const [umkmInfo] = await db.query('SELECT user_id FROM umkm_profiles WHERE id = ?', [id]);
-        
-        if (umkmInfo.length > 0) {
-            const userIdLapak = umkmInfo[0].user_id;
-            // 2. Hapus dari tabel users (semuanya akan ikut terhapus berkat cascade)
-            await db.query('DELETE FROM users WHERE id = ?', [userIdLapak]);
-        } else {
-             // Fallback jika tidak ada user_id (hanya hapus profil)
-             await db.query('DELETE FROM umkm_profiles WHERE id = ?', [id]);
-        }
+app.delete("/api/admin/umkm/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
 
-        return res.status(200).json({ message: 'Mitra UMKM beserta produknya berhasil dihapus permanen.' });
-    } catch (error) {
-        console.error("Error delete UMKM admin:", error);
-        return res.status(500).json({ message: 'Gagal menghapus UMKM.' });
+    // Karena kita menggunakan ON DELETE CASCADE di database,
+    // menghapus data 'user_id' di tabel users akan otomatis melenyapkan
+    // profil umkm, produk, dan pesanannya sekaligus sampai bersih tak bersisa!
+
+    // 1. Cari tahu user_id dari UMKM ini
+    const [umkmInfo] = await db.query(
+      "SELECT user_id FROM umkm_profiles WHERE id = ?",
+      [id],
+    );
+
+    if (umkmInfo.length > 0) {
+      const userIdLapak = umkmInfo[0].user_id;
+      // 2. Hapus dari tabel users (semuanya akan ikut terhapus berkat cascade)
+      await db.query("DELETE FROM users WHERE id = ?", [userIdLapak]);
+    } else {
+      // Fallback jika tidak ada user_id (hanya hapus profil)
+      await db.query("DELETE FROM umkm_profiles WHERE id = ?", [id]);
     }
+
+    return res
+      .status(200)
+      .json({
+        message: "Mitra UMKM beserta produknya berhasil dihapus permanen.",
+      });
+  } catch (error) {
+    console.error("Error delete UMKM admin:", error);
+    return res.status(500).json({ message: "Gagal menghapus UMKM." });
+  }
 });
 
 // Jalankan Server
