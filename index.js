@@ -7,6 +7,8 @@ const jwt = require("jsonwebtoken");
 const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
+const cloudinary = require("cloudinary").v2;
+const { CloudinaryStorage } = require("multer-storage-cloudinary");
 
 dotenv.config();
 
@@ -21,12 +23,19 @@ if (!fs.existsSync("./uploads")) {
 
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, "uploads/");
-  },
-  filename: (req, file, cb) => {
-    cb(null, "logo-" + Date.now() + path.extname(file.originalname));
+// Konfigurasi Rahasia Cloudinary
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
+
+// Pengganti Folder Lokal: Lempar langsung ke Cloudinary
+const storage = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: {
+    folder: "sikara_uploads", // Nama folder yang akan otomatis dibuat di Cloudinary
+    allowed_formats: ["jpg", "png", "jpeg", "webp"],
   },
 });
 const upload = multer({ storage });
@@ -218,9 +227,9 @@ app.post("/api/auth/login", async (req, res) => {
 // ==========================================
 app.get("/api/public/products", async (req, res) => {
   try {
-    // Ambil produk dan gabungkan dengan nama usaha/toko dari tabel umkm_profiles
+    // 🔥 PERBAIKAN: Tambahkan u.logo_url agar foto profil toko ikut terbawa
     const queryText = `
-            SELECT p.*, u.business_name 
+            SELECT p.*, u.business_name, u.logo_url 
             FROM products p
             JOIN umkm_profiles u ON p.umkm_id = u.id
             ORDER BY p.rating DESC 
@@ -626,6 +635,7 @@ app.post("/api/umkm/orders-manual", async (req, res) => {
       });
     }
 
+    // 1. Simpan semua transaksi kasir ke tabel orders
     const queryText = `
             INSERT INTO orders (umkm_id, product_name, quantity, price, total, created_at)
             VALUES ?
@@ -645,9 +655,23 @@ app.post("/api/umkm/orders-manual", async (req, res) => {
     });
 
     await db.query(queryText, [values]);
-    return res
-      .status(201)
-      .json({ message: "Seluruh transaksi kasir berhasil disimpan!" });
+
+    // 🔥 2. FITUR BARU: Kurangi stok pada tabel products secara otomatis
+    // Kita menggunakan looping untuk memotong stok setiap barang di keranjang
+    for (const item of items) {
+      const qtySold = parseInt(item.quantity);
+
+      // Menggunakan GREATEST(stock - ?, 0) agar stok tidak menjadi minus (minimal 0)
+      await db.query(
+        "UPDATE products SET stock = GREATEST(stock - ?, 0) WHERE umkm_id = ? AND title = ?",
+        [qtySold, umkm_id, item.product_name],
+      );
+    }
+
+    return res.status(201).json({
+      message:
+        "Seluruh transaksi berhasil disimpan dan stok telah otomatis dikurangi!",
+    });
   } catch (error) {
     console.error("Gagal memproses kasir multi-item:", error);
     return res
@@ -872,7 +896,7 @@ app.put("/api/umkm/profile/:userId", async (req, res) => {
 });
 
 // =======================================================
-// 🔥 API KHUSUS UPLOAD GAMBAR DARI PC
+// 🔥 API KHUSUS UPLOAD GAMBAR LANGSUNG KE CLOUDINARY
 // =======================================================
 app.post("/api/upload", upload.single("image"), (req, res) => {
   try {
@@ -881,12 +905,16 @@ app.post("/api/upload", upload.single("image"), (req, res) => {
         .status(400)
         .json({ message: "Tidak ada gambar yang diunggah." });
     }
-    // Kembalikan URL publik dari gambar yang baru saja masuk ke folder
-    const imageUrl = `https://backend-sikara.onrender.com/uploads/${req.file.filename}`;
+
+    // Cloudinary otomatis mengembalikan link URL gambar yang permanen di req.file.path!
+    const imageUrl = req.file.path;
+
     return res.status(200).json({ imageUrl });
   } catch (error) {
     console.error(error);
-    return res.status(500).json({ message: "Gagal memproses gambar." });
+    return res
+      .status(500)
+      .json({ message: "Gagal memproses gambar ke Cloudinary." });
   }
 });
 
