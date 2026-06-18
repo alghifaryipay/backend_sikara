@@ -696,7 +696,7 @@ app.post('/api/upload', upload.single('image'), (req, res) => {
             return res.status(400).json({ message: 'Tidak ada gambar yang diunggah.' });
         }
         // Kembalikan URL publik dari gambar yang baru saja masuk ke folder
-        const imageUrl = `http://localhost:5000/uploads/${req.file.filename}`;
+        const imageUrl = `https://backend-sikara.onrender.com/uploads/${req.file.filename}`;
         return res.status(200).json({ imageUrl });
     } catch (error) {
         console.error(error);
