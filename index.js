@@ -78,6 +78,7 @@ app.post("/api/auth/register", async (req, res) => {
     phone,
     location,
     category,
+    logo_url,
   } = req.body;
 
   if (!name || !email || !password || !role) {
@@ -119,8 +120,17 @@ app.post("/api/auth/register", async (req, res) => {
       }
 
       await db.query(
-        "INSERT INTO umkm_profiles (user_id, business_name, owner_name, email, phone, location, category) VALUES (?, ?, ?, ?, ?, ?, ?)",
-        [newUserId, business_name, name, email, phone, location, category],
+        "INSERT INTO umkm_profiles (user_id, business_name, owner_name, email, phone, location, category, logo_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        [
+          newUserId,
+          business_name,
+          name,
+          email,
+          phone,
+          location,
+          category,
+          logo_url || "",
+        ],
       );
     }
 
@@ -949,11 +959,9 @@ app.delete("/api/admin/umkm/:id", async (req, res) => {
       await db.query("DELETE FROM umkm_profiles WHERE id = ?", [id]);
     }
 
-    return res
-      .status(200)
-      .json({
-        message: "Mitra UMKM beserta produknya berhasil dihapus permanen.",
-      });
+    return res.status(200).json({
+      message: "Mitra UMKM beserta produknya berhasil dihapus permanen.",
+    });
   } catch (error) {
     console.error("Error delete UMKM admin:", error);
     return res.status(500).json({ message: "Gagal menghapus UMKM." });
