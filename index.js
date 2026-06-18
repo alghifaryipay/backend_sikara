@@ -892,6 +892,62 @@ app.post("/api/upload", upload.single("image"), (req, res) => {
   }
 });
 
+// =======================================================
+// 🔥 API ADMIN: UPDATE (EDIT) DATA UMKM
+// =======================================================
+app.put('/api/admin/umkm/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { business_name, owner_name, email, phone, location, category, status } = req.body;
+
+        const queryText = `
+            UPDATE umkm_profiles 
+            SET business_name = ?, owner_name = ?, email = ?, phone = ?, location = ?, category = ?, status = ?
+            WHERE id = ?
+        `;
+        
+        await db.query(queryText, [business_name, owner_name, email, phone, location, category, status, id]);
+        
+        // (Opsional) Jika email dan owner_name diupdate, update juga di tabel users
+        // await db.query('UPDATE users SET name = ?, email = ? WHERE id = (SELECT user_id FROM umkm_profiles WHERE id = ?)', [owner_name, email, id]);
+
+        return res.status(200).json({ message: 'Data UMKM berhasil diperbarui!' });
+    } catch (error) {
+        console.error("Error update UMKM admin:", error);
+        return res.status(500).json({ message: 'Gagal memperbarui data UMKM.' });
+    }
+});
+
+// =======================================================
+// 🔥 API ADMIN: HAPUS PERMANEN MITRA UMKM
+// =======================================================
+app.delete('/api/admin/umkm/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        // Karena kita menggunakan ON DELETE CASCADE di database, 
+        // menghapus data 'user_id' di tabel users akan otomatis melenyapkan 
+        // profil umkm, produk, dan pesanannya sekaligus sampai bersih tak bersisa!
+        
+        // 1. Cari tahu user_id dari UMKM ini
+        const [umkmInfo] = await db.query('SELECT user_id FROM umkm_profiles WHERE id = ?', [id]);
+        
+        if (umkmInfo.length > 0) {
+            const userIdLapak = umkmInfo[0].user_id;
+            // 2. Hapus dari tabel users (semuanya akan ikut terhapus berkat cascade)
+            await db.query('DELETE FROM users WHERE id = ?', [userIdLapak]);
+        } else {
+             // Fallback jika tidak ada user_id (hanya hapus profil)
+             await db.query('DELETE FROM umkm_profiles WHERE id = ?', [id]);
+        }
+
+        return res.status(200).json({ message: 'Mitra UMKM beserta produknya berhasil dihapus permanen.' });
+    } catch (error) {
+        console.error("Error delete UMKM admin:", error);
+        return res.status(500).json({ message: 'Gagal menghapus UMKM.' });
+    }
+});
+
 // Jalankan Server
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
